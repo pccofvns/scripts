@@ -1,0 +1,29 @@
+ci/cd:
+  - changed-files:
+      - any-glob-to-any-file: .github/workflows/*
+      - any-glob-to-any-file: build-automation/**
+      - any-glob-to-any-file: build/**
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.md"
+      - any-glob-to-any-file: "**/*.adoc"
+database:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.sql"
+feature:
+  - head-branch: ["^feature", "feature", "^story", "story"]
+bug:
+  - head-branch:
+      ["^bug", "bug", "^defect", "defect", "^fix", "fix", "^bugfix", "bugfix"]
+source:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.java"
+ui:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.jsp"
+      - any-glob-to-any-file: "**/*.js"
+      - any-glob-to-any-file: "**/*.css"
+      - any-glob-to-any-file: "**/*.scss"
+configuration:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.properties"
