@@ -28,12 +28,12 @@ jobs:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           sync-labels: true
           configuration-path: .github/labeler.yml
-      - name: Check-out utilities repository
+      - name: Check-out scripts repository
         uses: actions/checkout@v4
-        with:
-          repository: pccofvns/scripts
-          ref: master
-          token: ${{ secrets.GIT_CREDENTIALS }}
+        # with:
+        #   repository: pccofvns/scripts
+        #   ref: master
+        #   token: ${{ secrets.GIT_CREDENTIALS }}
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -42,5 +42,5 @@ jobs:
         run: |
           jq --raw-output ".pull_request.body" "$GITHUB_EVENT_PATH" > pr_body.txt
           jq --raw-output ".pull_request.title" "$GITHUB_EVENT_PATH" > pr_title.txt
-          python ${{ env.SCRIPTS_DIR }}/github_pull_request_linter.py -b pr_body.txt -t pr_title.txt
+          python github_pull_request_linter.py -b pr_body.txt -t pr_title.txt
         shell: sh
