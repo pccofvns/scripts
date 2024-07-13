@@ -5,34 +5,31 @@ import re
 import requests
 from pathlib import Path
 
-# List of specified JIRA project keys
-specified_projects = ['JIRA']
-# Regular expression pattern for JIRA issue keys
-# Positive lookbehind assertion to include only specified projects
-jira_pattern = r'\b(?:' + '|'.join(specified_projects) + r')-\d+\b'
-base_url = 'https://api.github.com/repos'
-## TODO: Change as per your need
+# Name of GitHub Organization of project owner
 org_name = 'pccofvns'
-header = '''{panel:title=Dev Resolution Comments|borderStyle=dashed|borderColor=#cccccc|titleBGColor=#f7d6c1|bgColor=#ffffce}'''
-footer = '''{panel}'''
+# List of specified project keys
+specified_projects_keys = ['JIRA']
+# Supported values, ASCIIDOC. Default MARKDOWN
+hyperlink_style = 'JIRA'
 
-TITLE = 'Title'
-RESOLUTION_SUMMARY = 'Resolution Summary'
-TEST_CASES_RUN = 'Test Cases Run'
-PULL_REQUESTS = 'Pull Request(s)'
+# Regular expression pattern for issue keys
+# Positive lookbehind assertion to include only specified projects
+issue_key_pattern = r'\b(?:' + '|'.join(specified_projects_keys) + r')-\d+\b'
+base_url = 'https://api.github.com/repos'
+DESCRIPTION_OF_CHANGES = 'Description of Changes'
+RCA = 'Root Cause Analysis'
+CODE_CHANGES = 'Code Changes'
+IMPACT_ANALYSIS = 'Impact Analysis'
 REVIEWERS = 'Reviewers'
-DATABASE_SCHEMA_ALTERED = 'Database Schema Altered'
-PROPERTY_CONFIG_CHANGED = 'Property/Config Changed'
-
-DESCRIPTION_OF_CHANGES = 'description_of_changes'
-RCA = 'rca'
-CODE_CHANGES = 'code_changes'
-IMPACT_ANALYSIS = 'impact_analysis'
-REVIEWERS_LIST = 'reviewers'
-ISSUES = 'issues'
-ISSUE_KEYS = 'issue_keys'
-REVIEW_COMMENTS = 'review_comments'
-REVIEWER_GITHUB_IDS = 'REVIEWER_GITHUB_IDS'
+ISSUES = 'Issues'
+ISSUE_KEYS = 'Issue Keys'
+TESTS = 'Tests'
+REVIEW_COMMENTS = 'Review Comments'
+REVIEWER_USERNAMES = 'Reviewer Usernames'
+DATABASE_CHANGES = 'Database Changes'
+PROPERTY_CHANGES = 'Property Changes'
+PULL_REQUEST_LINKS = 'Pull Request Link(s)'
+PULL_REQUEST_TITLE = 'Title'
 
 H2 = '##'
 H3 = '##'
@@ -42,8 +39,6 @@ TESTS_HEADING = '## Tests'
 IMPACT_ANALYSIS_HEADING = '### Impact Analysis'
 CODE_CHANGES_HEADING = '### Code Changes'
 RCA_HEADING = '### RCA'
-
-JIRA_DEV_RESOLUTION_COMMENT_KEYS = [TITLE, RESOLUTION_SUMMARY, TEST_CASES_RUN, PULL_REQUESTS, REVIEWERS, DATABASE_SCHEMA_ALTERED, PROPERTY_CONFIG_CHANGED]
 
 pull_request_template_headers = ["## Description of Changes", "## Issue ticket number(s)", "## Tests"]
 pull_request_template_sub_headers = {"## Description of Changes": ["### RCA", "### Code Changes",
@@ -71,81 +66,70 @@ def get_git_headers(args):
     return headers
 
 
-def generate_pr_details(args):
-    context = {
+def generate_pull_request_details(args):
+    pull_request_details = {
         REVIEW_COMMENTS: set(),
-        REVIEWER_GITHUB_IDS: set(),
-        REVIEWERS_LIST: set(),
+        REVIEWER_USERNAMES: set(),
         ISSUE_KEYS: set(),
-        DATABASE_SCHEMA_ALTERED: "No",
-        PROPERTY_CONFIG_CHANGED: "No"
+        DATABASE_CHANGES: False,
+        PROPERTY_CHANGES: False
     }
     pr_numbers = args['pr']
     repo_name = get_repo_name(args)
     for pr_num in pr_numbers:
         pr = get_pull_request_details(args, pr_num, repo_name)
-        populate_title(context, pr['title'])
+        populate_title(pull_request_details, pr['title'])
 
-        populate_pr_context_from_pr_body(args, context, pr)
+        populate_pull_request_details_from_pr_body(args, pull_request_details, pr)
 
-        issue_keys = find_specific_jira_keys(pr['title'])
+        issue_keys = find_specific_issue_keys(pr['title'])
         issue_ticket_numbers_text = extract_issue_ticket_numbers_from_pr_body(pr['body'])
         if issue_ticket_numbers_text:
-            issue_keys_in_pr_body = find_specific_jira_keys(issue_ticket_numbers_text.strip())
-            remove_unwanted_jira_ids(issue_keys_in_pr_body)
+            issue_keys_in_pr_body = find_specific_issue_keys(issue_ticket_numbers_text.strip())
+            remove_unwanted_issue_keys(issue_keys_in_pr_body)
             issue_keys = issue_keys + issue_keys_in_pr_body
-        context[ISSUE_KEYS].update(set(issue_keys))
-
-    context[REVIEWERS] = ', '.join(context[REVIEWERS_LIST])
-    jira_comment = header + "\n"
-    for key in JIRA_DEV_RESOLUTION_COMMENT_KEYS:
-        jira_comment = jira_comment + "|*" + \
-                           key + "*|" + transform_text_from_markdown_to_jira_syntax(context[key]) + "|\n"
-    jira_comment = jira_comment + footer
-    context['jira_comment'] = jira_comment
-    return context
+        pull_request_details[ISSUE_KEYS].update(set(issue_keys))
+    return pull_request_details
 
 
-def populate_pr_context_from_pr_body(args, context, pr):
-    populate_resolution_summary(context, pr['body'])
-    populate_test_cases_run(context, pr['body'])
-    populate_pull_request_links(pr, context)
+def populate_pull_request_details_from_pr_body(args, pull_request_details, pr):
+    populate_resolution_summary(pull_request_details, pr['body'])
+    populate_test_cases_run(pull_request_details, pr['body'])
+    populate_pull_request_links(pr, pull_request_details)
     pr_reviews = get_pull_request_reviews(args, pr['number'], pr['head']['repo']['name'])
     for pr_review in pr_reviews:
-        populate_review_details_by_git_review(args, context, pr_review)
+        populate_review_details_by_git_review(args, pull_request_details, pr_review)
     pr_files = get_pull_request_files(args, pr['number'], pr['head']['repo']['name'])
     for pr_file in pr_files:
-        populate_file_type_changes_from_commits(context, pr_file)
+        populate_file_type_changes_from_commits(pull_request_details, pr_file)
 
 
-def populate_file_type_changes_from_commits(context, pr_file):
-    if not context[PROPERTY_CONFIG_CHANGED] == "No" and (
+def populate_file_type_changes_from_commits(pull_request_details, pr_file):
+    if pull_request_details[PROPERTY_CHANGES] is False and (
             ('.properties' in pr_file['filename'].lower() and 'message' not in pr_file[
                 'filename'].lower()) or 'ddl' in pr_file['filename'].lower()
             or '_config' in pr_file['filename'].lower()):
-        context[PROPERTY_CONFIG_CHANGED] = "Yes"
-    if not context[DATABASE_SCHEMA_ALTERED] == "No" and '.sql' in pr_file['filename'].lower():
-        context[DATABASE_SCHEMA_ALTERED] = "Yes"
+        pull_request_details[PROPERTY_CHANGES] = True
+    if pull_request_details[DATABASE_CHANGES] is False and '.sql' in pr_file['filename'].lower():
+        pull_request_details[DATABASE_CHANGES] = True
 
 
-def populate_review_details_by_git_review(args, context, pr_review):
+def populate_review_details_by_git_review(args, pull_request_details, pr_review):
     username = pr_review['user']['login']
-    username_url = "[" + username + "|" + pr_review['user']['html_url'] + "]"
-    context[REVIEWER_GITHUB_IDS].add(username)
+    username_url = create_hyperlink(username, pr_review['user']['html_url'])
     review_comment = pr_review['body']
-    if username:
-        context[REVIEWERS_LIST].add("[~" + username + "]")
-        if review_comment:
-            context[REVIEW_COMMENTS].add("[~" + username + "] :" + review_comment)
-    else:
-        context[REVIEWERS_LIST].add(username_url)
-        if review_comment:
-            context[REVIEW_COMMENTS].add(username + " :" + review_comment)
+    issue_management_system_username = username_url
+    if hyperlink_style == 'JIRA':
+        issue_management_system_username = "[~" + username + "]"
+    pull_request_details[REVIEWER_USERNAMES].add(issue_management_system_username)
+    if review_comment:
+        pull_request_details[REVIEW_COMMENTS].add(issue_management_system_username + ": " + review_comment)
 
 
 def get_pull_request_files(args, pr_num, repo_name):
     pr_files_response = requests.get(
-        base_url + "/" + org_name + "/" + repo_name + "/pulls" + "/" + str(pr_num) + "/files", headers=get_git_headers(args))
+        base_url + "/" + org_name + "/" + repo_name + "/pulls" + "/" + str(pr_num) + "/files",
+        headers=get_git_headers(args))
     pr_files = pr_files_response.json()
     return pr_files
 
@@ -158,15 +142,26 @@ def get_pull_request_reviews(args, pr_num, repo_name):
     return pr_reviews
 
 
-def populate_pull_request_links(pr, context):
-    pr_link = "[#" + \
-              str(pr['number']) + "|" + pr['html_url'] + \
-              "]" + "@" + pr['base']['ref'] + " on " + str(pr['merged_at'])
-    if PULL_REQUESTS in context:
-        context[PULL_REQUESTS] = context[PULL_REQUESTS] + \
-                                     "\n" + pr_link
+def populate_pull_request_links(pr, pull_request_details):
+    display_text = str(pr['number'])
+    url = pr['html_url']
+    hyperlink = create_hyperlink(display_text, url)
+    pr_link = hyperlink + "@" + pr['base']['ref'] + " on " + str(pr['merged_at'])
+    if PULL_REQUEST_LINKS in pull_request_details:
+        pull_request_details[PULL_REQUEST_LINKS] = pull_request_details[PULL_REQUEST_LINKS] + \
+                                                   "\n" + pr_link
     else:
-        context[PULL_REQUESTS] = pr_link
+        pull_request_details[PULL_REQUEST_LINKS] = pr_link
+
+
+def create_hyperlink(display_text, url):
+    if hyperlink_style == 'JIRA':
+        hyperlink = "[#" + display_text + "|" + url + "]"
+    elif hyperlink_style == 'ASCIIDOC':
+        hyperlink = url + "[" + display_text + "]"
+    else:
+        hyperlink = "[#" + display_text + "]" + "(" + url + ")"
+    return hyperlink
 
 
 def get_pull_request_details(args, pr_num, repo_name):
@@ -191,7 +186,7 @@ def update_pull_request_title(new_pr_title):
 
 
 def add_comment_to_github_issue(new_comment):
-    # Add comment to github issue
+    # Add comment to GitHub issue
     url = base_url + "/" + os.environ['REPO_NAME'] + "/issues" + "/" + os.environ['PR_NUMBER'] + "/comments"
     headers = {
         "Authorization": "Bearer " + git_auth_token({}),
@@ -211,34 +206,6 @@ def get_repo_name(args):
     return repo_name
 
 
-def transform_text_from_markdown_to_jira_syntax(text):
-    if not text:
-        return text
-    text = text.replace('**', '*')
-    text_lines = text.splitlines()
-    for i, line in enumerate(text_lines):
-        if line and line.strip().startswith("```"):
-            if len(line.strip()) == 3:
-                text_lines[i] = "{code}"
-            else:
-                text_lines[i] = "{code:" + line.strip()[3:].strip() + "}"
-        elif line and line.strip().startswith("```"):
-            text_lines[i] = "{code}"
-        elif line and line.strip().startswith("#####"):
-            text_lines[i] = "h5. " + line.strip()[5:]
-        elif line and line.strip().startswith("####"):
-            text_lines[i] = "h4. " + line.strip()[4:]
-        elif line and line.strip().startswith("###"):
-            text_lines[i] = "h3. " + line.strip()[3:]
-        elif line and line.strip().startswith("##"):
-            text_lines[i] = "h2. " + line.strip()[2:]
-    text = "\n".join(text_lines)
-    text = inline_code(text)
-    text = markdown_checkboxes_to_jira_syntax(text)
-    text = os.linesep.join([s for s in text.splitlines() if s])
-    return text
-
-
 def inline_code(text):
     new_string = ""
     back_tick_count = 0
@@ -255,41 +222,34 @@ def inline_code(text):
     return new_string
 
 
-def markdown_checkboxes_to_jira_syntax(text):
-    text = text.replace("- [ ]", "(x)")
-    text = text.replace("- [x]", "(/)")
-    return text
-
-
 def populate_title(pull_request, issue_title):
-    if TITLE not in pull_request:
-        pull_request[TITLE] = issue_title
+    if PULL_REQUEST_TITLE not in pull_request:
+        pull_request[PULL_REQUEST_TITLE] = issue_title
 
 
 def populate_resolution_summary(pull_request, pr_body):
     description = extract_description_from_pr_body(pr_body)
-    pull_request[DESCRIPTION_OF_CHANGES] = description
-    if RESOLUTION_SUMMARY in pull_request:
-        existing_resolution_summary = pull_request[RESOLUTION_SUMMARY]
+    if DESCRIPTION_OF_CHANGES in pull_request:
+        existing_resolution_summary = pull_request[DESCRIPTION_OF_CHANGES]
         if existing_resolution_summary and existing_resolution_summary.strip() != description.strip():
-            pull_request[RESOLUTION_SUMMARY] = pull_request[RESOLUTION_SUMMARY] + "\n" + description
+            pull_request[DESCRIPTION_OF_CHANGES] = pull_request[DESCRIPTION_OF_CHANGES] + "\n" + description
         else:
-            pull_request[RESOLUTION_SUMMARY] = description
+            pull_request[DESCRIPTION_OF_CHANGES] = description
     else:
-        pull_request[RESOLUTION_SUMMARY] = description
+        pull_request[DESCRIPTION_OF_CHANGES] = description
     populate_sub_headings_of_description(pull_request, description)
 
 
 def populate_test_cases_run(pull_request, pr_body):
     tests = extract_tests_from_pr_body(pr_body)
-    if TEST_CASES_RUN in pull_request:
-        existing_tests = pull_request[TEST_CASES_RUN]
+    if TESTS in pull_request:
+        existing_tests = pull_request[TESTS]
         if existing_tests and existing_tests.strip() != tests.strip():
-            pull_request[TEST_CASES_RUN] = pull_request[TEST_CASES_RUN] + "\n" + tests
+            pull_request[TESTS] = pull_request[TESTS] + "\n" + tests
         else:
-            pull_request[TEST_CASES_RUN] = tests
+            pull_request[TESTS] = tests
     else:
-        pull_request[TEST_CASES_RUN] = tests
+        pull_request[TESTS] = tests
 
 
 def extract_description_from_pr_body(pr_body):
@@ -308,13 +268,13 @@ def extract_issue_ticket_numbers_from_pr_body(pr_body):
         pull_request_template_headers[2])].strip()
 
 
-def find_specific_jira_keys(text):
+def find_specific_issue_keys(text):
     # Find all matches using the pattern
-    issue_keys = re.findall(jira_pattern, text)
+    issue_keys = re.findall(issue_key_pattern, text)
     return issue_keys
 
 
-def remove_unwanted_jira_ids(issue_keys_in_pr_body):
+def remove_unwanted_issue_keys(issue_keys_in_pr_body):
     if 'JIRA-0000' in issue_keys_in_pr_body:
         issue_keys_in_pr_body.remove('JIRA-0000')
 
@@ -340,9 +300,9 @@ def populate_sub_headings_of_description(pull_request, description):
         right_part_of_text = description.split(CODE_CHANGES_HEADING)[1]
         if right_part_of_text and right_part_of_text.find(H2) > 0:
             pull_request[CODE_CHANGES] = description[
-                                           code_changes_heading_start + 17: description.split(CODE_CHANGES_HEADING)[
-                                                                                1].index(
-                                               H2) + code_changes_heading_start + 16].strip()
+                                         code_changes_heading_start + 17: description.split(CODE_CHANGES_HEADING)[
+                                                                              1].index(
+                                             H2) + code_changes_heading_start + 16].strip()
         else:
             pull_request[CODE_CHANGES] = description[code_changes_heading_start + 17:].strip()
     if IMPACT_ANALYSIS_HEADING in description:
@@ -350,8 +310,8 @@ def populate_sub_headings_of_description(pull_request, description):
         right_part_of_text = description.split(IMPACT_ANALYSIS_HEADING)[1]
         if right_part_of_text and right_part_of_text.find(H2) > 0:
             pull_request[IMPACT_ANALYSIS] = description[impact_analysis_heading_start + 20:
-                                                          description.split(IMPACT_ANALYSIS_HEADING)[1].index(
-                                                              H2) + impact_analysis_heading_start + 19].strip()
+                                                        description.split(IMPACT_ANALYSIS_HEADING)[1].index(
+                                                            H2) + impact_analysis_heading_start + 19].strip()
         else:
             pull_request[IMPACT_ANALYSIS] = description[impact_analysis_heading_start + 20:].strip()
 

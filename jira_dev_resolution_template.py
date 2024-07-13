@@ -61,7 +61,7 @@ def main():
     # Parse CLI arguments
     args = parse_cli_arguments()
     # Generate dev resolution template
-    context = generate_pr_details(args)
+    context = generate_pull_request_details(args)
     # Get issue details
     issue_key = args['issue_key']
     if issue_key:

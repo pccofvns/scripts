@@ -55,7 +55,7 @@ def lint():
     new_pr_title = ' '.join(new_pr_title.split())
     new_pr_title = re.sub(r'\w+/', '', new_pr_title)
     new_pr_title = new_pr_title.strip()
-    issue_keys_in_title = find_specific_jira_keys(new_pr_title)
+    issue_keys_in_title = find_specific_issue_keys(new_pr_title)
     pull_request[RESOLUTION_SUMMARY] = extract_description_from_pr_body(pr_body)
     pull_request[ISSUES] = extract_issue_ticket_numbers_from_pr_body(pr_body)
     pull_request[TEST_CASES_RUN] = extract_tests_from_pr_body(pr_body)
@@ -66,8 +66,8 @@ def lint():
         return False
     if not issue_keys_in_title or len(issue_keys_in_title) == 0:
         eprint(f'Missing JIRA number in title \'{pr_title}\'')
-        issue_keys_in_pr_body = find_specific_jira_keys(pull_request[ISSUES].strip())
-        remove_unwanted_jira_ids(issue_keys_in_pr_body)
+        issue_keys_in_pr_body = find_specific_issue_keys(pull_request[ISSUES].strip())
+        remove_unwanted_issue_keys(issue_keys_in_pr_body)
         if len(issue_keys_in_pr_body) == 0:
             eprint(f'Missing JIRA number in PR body and title')
             return False
@@ -121,7 +121,7 @@ def update_pr_title_with_issue_key(issue_keys_in_pr_body, issue_keys_in_title, n
 
 def capitalize_jira_project_name(pr_title):
     text = pr_title
-    for project in specified_projects:
+    for project in specified_projects_keys:
         # Create a regex pattern to match any prefix followed by the project name and a numerical ID
         pattern = re.compile(r'(\S+)?\s*(' + project + r')\s+(\d+)', re.IGNORECASE)
         # Replace the found pattern with the correct format
@@ -186,7 +186,7 @@ def validate(pull_request):
         eprint(f'Mandatory sub-section "Impact Analysis" can not be empty')
         return False
     issues_text = pull_request[ISSUES]
-    issues = find_specific_jira_keys(issues_text)
+    issues = find_specific_issue_keys(issues_text)
     if len(issues) != 0 and ('JIRA-0000' in issues):
         eprint('Invalid Issues JIRA-0000')
         return False
