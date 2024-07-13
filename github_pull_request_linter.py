@@ -56,10 +56,10 @@ def lint():
     new_pr_title = re.sub(r'\w+/', '', new_pr_title)
     new_pr_title = new_pr_title.strip()
     issue_keys_in_title = find_specific_issue_keys(new_pr_title)
-    pull_request[RESOLUTION_SUMMARY] = extract_description_from_pr_body(pr_body)
+    pull_request[DESCRIPTION_OF_CHANGES] = extract_description_from_pr_body(pr_body)
     pull_request[ISSUES] = extract_issue_ticket_numbers_from_pr_body(pr_body)
-    pull_request[TEST_CASES_RUN] = extract_tests_from_pr_body(pr_body)
-    populate_sub_headings_of_description(pull_request, pull_request[RESOLUTION_SUMMARY])
+    pull_request[TESTS] = extract_tests_from_pr_body(pr_body)
+    populate_sub_headings_of_description(pull_request, pull_request[DESCRIPTION_OF_CHANGES])
     # check if any of these two sub-headings are same
     if pull_request[RCA] == pull_request[CODE_CHANGES] or pull_request[RCA] == pull_request[IMPACT_ANALYSIS] or pull_request[CODE_CHANGES] == pull_request[IMPACT_ANALYSIS]:
         eprint(f'Root Cause Analysis, Code Changes, and Impact Analysis should be different')
@@ -170,10 +170,10 @@ def get_commit_type_from_branch_name(branch_name):
 
 
 def validate(pull_request):
-    if RESOLUTION_SUMMARY not in pull_request or not pull_request[RESOLUTION_SUMMARY].strip():
+    if DESCRIPTION_OF_CHANGES not in pull_request or not pull_request[DESCRIPTION_OF_CHANGES].strip():
         eprint(f'Mandatory sections "Description of Changes" can not be empty')
         return False
-    if TEST_CASES_RUN not in pull_request or not pull_request[TEST_CASES_RUN].strip() or DEFAULT_TEST_CASE_RUN_MESSAGE in pull_request[TEST_CASES_RUN]:
+    if TESTS not in pull_request or not pull_request[TESTS].strip() or DEFAULT_TEST_CASE_RUN_MESSAGE in pull_request[TESTS]:
         eprint(f'Mandatory section "Tests" can not be empty or default message')
         return False
     if RCA not in pull_request or not pull_request[RCA].strip():
