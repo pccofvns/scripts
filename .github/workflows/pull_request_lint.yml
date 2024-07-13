@@ -33,7 +33,7 @@ jobs:
         with:
           repository: pccofvns/scripts
           ref: master
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GIT_CREDENTIALS }}
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
