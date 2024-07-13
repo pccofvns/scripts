@@ -1,0 +1,46 @@
+name: Pull Request Linter
+on:
+  pull_request_target:
+    branches:
+      - master
+    types: [opened, synchronize, reopened, edited]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+env:
+  GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+  PR_NUMBER: ${{ github.event.number }}
+  REPO_NAME: ${{ github.repository }}
+jobs:
+  pr-lint:
+    name: Pull Request Validation
+    runs-on: [ ubuntu-latest ]
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Label pull request
+        uses: actions/labeler@v5
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          sync-labels: true
+          configuration-path: .github/labeler.yml
+      - name: Check-out utilities repository
+        uses: actions/checkout@v4
+        with:
+          repository: pccofvns/scripts
+          ref: master
+          token: ${{ secrets.GIT_CREDENTIALS }}
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          cache: 'pip' # caching pip dependencies
+      - name: Validate Pull Request
+        run: |
+          jq --raw-output ".pull_request.body" "$GITHUB_EVENT_PATH" > pr_body.txt
+          jq --raw-output ".pull_request.title" "$GITHUB_EVENT_PATH" > pr_title.txt
+          python ${{ env.SCRIPTS_DIR }}/github_pull_request_linter.py -b pr_body.txt -t pr_title.txt
+        shell: sh
