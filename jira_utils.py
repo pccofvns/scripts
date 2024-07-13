@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 
 from github_pull_request_utils import *
 
-JIRA_DEV_RESOLUTION_COMMENT_KEYS = [PULL_REQUEST_TITLE, DESCRIPTION_OF_CHANGES, TESTS, PULL_REQUEST_LINKS, REVIEWER_USERNAMES, DATABASE_CHANGES, PROPERTY_CHANGES]
+JIRA_DEV_RESOLUTION_COMMENT_KEYS = [PULL_REQUEST_TITLE, DESCRIPTION_OF_CHANGES, TESTS, PULL_REQUEST_LINKS, REVIEWERS, DATABASE_CHANGES, PROPERTY_CHANGES]
 
 jira_rest_api_url = 'https://jira.mycompany.com/rest/api/latest'
 JIRA_CUSTOM_FIELD_XYZ = 'customfield_12345'
@@ -163,11 +163,13 @@ def markdown_checkboxes_to_jira_syntax(text):
     return text
 
 
-def transform_text_from_markdown_to_jira_syntax(text):
-    if not text:
-        return text
-    text = text.replace('**', '*')
-    text_lines = text.splitlines()
+def transform_text_from_markdown_to_jira_syntax(value):
+    if isinstance(value, bool):
+        return 'Yes' if value else 'No'
+    if not value:
+        return value
+    value = value.replace('**', '*')
+    text_lines = value.splitlines()
     for i, line in enumerate(text_lines):
         if line and line.strip().startswith("```"):
             if len(line.strip()) == 3:
@@ -184,15 +186,16 @@ def transform_text_from_markdown_to_jira_syntax(text):
             text_lines[i] = "h3. " + line.strip()[3:]
         elif line and line.strip().startswith("##"):
             text_lines[i] = "h2. " + line.strip()[2:]
-    text = "\n".join(text_lines)
-    text = inline_code(text)
-    text = markdown_checkboxes_to_jira_syntax(text)
-    text = os.linesep.join([s for s in text.splitlines() if s])
-    return text
+    value = "\n".join(text_lines)
+    value = inline_code(value)
+    value = markdown_checkboxes_to_jira_syntax(value)
+    value = os.linesep.join([s for s in value.splitlines() if s])
+    return value
 
 
 def populate_jira_comment(pull_request_details):
     pull_request_details[REVIEWERS] = ', '.join(pull_request_details[REVIEWER_USERNAMES])
+    print(pull_request_details)
     jira_comment = header + "\n"
     for key in JIRA_DEV_RESOLUTION_COMMENT_KEYS:
         jira_comment = jira_comment + "|*" + \

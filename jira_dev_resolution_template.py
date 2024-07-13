@@ -61,28 +61,29 @@ def main():
     # Parse CLI arguments
     args = parse_cli_arguments()
     # Generate dev resolution template
-    context = generate_pull_request_details(args)
+    pull_request_details = generate_pull_request_details(args)
+    populate_jira_comment(pull_request_details)
     # Get issue details
     issue_key = args['issue_key']
     if issue_key:
         init_jira_auth(args)
         issue = get_issue_details(args, issue_key)
-        fields = populate_jira_fields(args, context, issue)
+        fields = populate_jira_fields(args, pull_request_details, issue)
         if fields:
             post_update(args, issue_key, fields)
-        if context['jira_comment']:
-            post_comment(args, issue_key, context['jira_comment'])
+        if pull_request_details['jira_comment']:
+            post_comment(args, issue_key, pull_request_details['jira_comment'])
     else:
-        print(context['jira_comment'])
+        print(pull_request_details['jira_comment'])
         if args['mode'] == 'github':
-            post_resolution_comment(args, context)
-            for issue_key in context[ISSUE_KEYS]:
-                if context['jira_comment']:
-                    post_comment_on_jira_with_token(str(issue_key), context['jira_comment'])
+            post_resolution_comment(args, pull_request_details)
+            for issue_key in pull_request_details[ISSUE_KEYS]:
+                if pull_request_details['jira_comment']:
+                    post_comment_on_jira_with_token(str(issue_key), pull_request_details['jira_comment'])
                 issue = get_issue_details_with_token(issue_key)
                 if issue:
                     fields = {}
-                    populate_jira_impact_analysis(context, issue, fields)
+                    populate_jira_custom_field(pull_request_details, issue, fields)
                     if fields:
                         try:
                             post_update_on_jira_with_token(issue_key, fields)
