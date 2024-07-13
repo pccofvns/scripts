@@ -60,7 +60,7 @@ def lint():
     pull_request[ISSUES] = extract_issue_ticket_numbers_from_pr_body(pr_body)
     pull_request[TESTS] = extract_tests_from_pr_body(pr_body)
     populate_sub_headings_of_description(pull_request, pull_request[DESCRIPTION_OF_CHANGES])
-    # check if any of these two sub-headings are same
+    # check if any of these two subheadings are same
     if pull_request[RCA] == pull_request[CODE_CHANGES] or pull_request[RCA] == pull_request[IMPACT_ANALYSIS] or pull_request[CODE_CHANGES] == pull_request[IMPACT_ANALYSIS]:
         eprint(f'Root Cause Analysis, Code Changes, and Impact Analysis should be different')
         return False
@@ -93,12 +93,11 @@ def lint():
     if not is_conventional_commit:
         print(f'PR title \'{new_pr_title}\' is not in conventional commit format')
         conventional_commit_type = get_conventional_commit_type(issue_keys_in_title)
-        # new_pr_title = conventional_commit_type + ': ' + ('' if issue_key == original_issue_key else issue_key + ': ') + new_pr_title
         new_pr_title = conventional_commit_type + ': ' + new_pr_title
         print(f'Will have to update PR title to: {new_pr_title}')
         pr_update_needed = True
 
-    # Update Github PR title using Github REST API via Python requests module
+    # Update GitHub PR title using GitHub REST API via Python requests module
     if pr_update_needed:
         print(f'PR update needed. Updating PR title to: {new_pr_title}')
         update_pull_request_title(new_pr_title)
