@@ -12,7 +12,7 @@ ver=$($python_executable -V 2>&1 | sed 's/.* \([0-9]\).\([0-9]\).*/\1\2/')
 if [ "$ver" -lt "30" ]; then
     echo "This script requires python 3.0 or greater"
     exit 1
-else 
+else
 	echo "Python version is > 3 ..."
 fi
 

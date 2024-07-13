@@ -55,19 +55,19 @@ def lint():
     new_pr_title = ' '.join(new_pr_title.split())
     new_pr_title = re.sub(r'\w+/', '', new_pr_title)
     new_pr_title = new_pr_title.strip()
-    issue_keys_in_title = find_specific_jira_keys(new_pr_title)
-    pull_request[RESOLUTION_SUMMARY] = extract_description_from_pr_body(pr_body)
+    issue_keys_in_title = find_specific_issue_keys(new_pr_title)
+    pull_request[DESCRIPTION_OF_CHANGES] = extract_description_from_pr_body(pr_body)
     pull_request[ISSUES] = extract_issue_ticket_numbers_from_pr_body(pr_body)
-    pull_request[TEST_CASES_RUN] = extract_tests_from_pr_body(pr_body)
-    populate_sub_headings_of_description(pull_request, pull_request[RESOLUTION_SUMMARY])
-    # check if any of these two sub-headings are same
+    pull_request[TESTS] = extract_tests_from_pr_body(pr_body)
+    populate_sub_headings_of_description(pull_request, pull_request[DESCRIPTION_OF_CHANGES])
+    # check if any of these two subheadings are same
     if pull_request[RCA] == pull_request[CODE_CHANGES] or pull_request[RCA] == pull_request[IMPACT_ANALYSIS] or pull_request[CODE_CHANGES] == pull_request[IMPACT_ANALYSIS]:
         eprint(f'Root Cause Analysis, Code Changes, and Impact Analysis should be different')
         return False
     if not issue_keys_in_title or len(issue_keys_in_title) == 0:
         eprint(f'Missing JIRA number in title \'{pr_title}\'')
-        issue_keys_in_pr_body = find_specific_jira_keys(pull_request[ISSUES].strip())
-        remove_unwanted_jira_ids(issue_keys_in_pr_body)
+        issue_keys_in_pr_body = find_specific_issue_keys(pull_request[ISSUES].strip())
+        remove_unwanted_issue_keys(issue_keys_in_pr_body)
         if len(issue_keys_in_pr_body) == 0:
             eprint(f'Missing JIRA number in PR body and title')
             return False
@@ -93,12 +93,11 @@ def lint():
     if not is_conventional_commit:
         print(f'PR title \'{new_pr_title}\' is not in conventional commit format')
         conventional_commit_type = get_conventional_commit_type(issue_keys_in_title)
-        # new_pr_title = conventional_commit_type + ': ' + ('' if issue_key == original_issue_key else issue_key + ': ') + new_pr_title
         new_pr_title = conventional_commit_type + ': ' + new_pr_title
         print(f'Will have to update PR title to: {new_pr_title}')
         pr_update_needed = True
 
-    # Update Github PR title using Github REST API via Python requests module
+    # Update GitHub PR title using GitHub REST API via Python requests module
     if pr_update_needed:
         print(f'PR update needed. Updating PR title to: {new_pr_title}')
         update_pull_request_title(new_pr_title)
@@ -121,7 +120,7 @@ def update_pr_title_with_issue_key(issue_keys_in_pr_body, issue_keys_in_title, n
 
 def capitalize_jira_project_name(pr_title):
     text = pr_title
-    for project in specified_projects:
+    for project in specified_projects_keys:
         # Create a regex pattern to match any prefix followed by the project name and a numerical ID
         pattern = re.compile(r'(\S+)?\s*(' + project + r')\s+(\d+)', re.IGNORECASE)
         # Replace the found pattern with the correct format
@@ -170,10 +169,10 @@ def get_commit_type_from_branch_name(branch_name):
 
 
 def validate(pull_request):
-    if RESOLUTION_SUMMARY not in pull_request or not pull_request[RESOLUTION_SUMMARY].strip():
+    if DESCRIPTION_OF_CHANGES not in pull_request or not pull_request[DESCRIPTION_OF_CHANGES].strip():
         eprint(f'Mandatory sections "Description of Changes" can not be empty')
         return False
-    if TEST_CASES_RUN not in pull_request or not pull_request[TEST_CASES_RUN].strip() or DEFAULT_TEST_CASE_RUN_MESSAGE in pull_request[TEST_CASES_RUN]:
+    if TESTS not in pull_request or not pull_request[TESTS].strip() or DEFAULT_TEST_CASE_RUN_MESSAGE in pull_request[TESTS]:
         eprint(f'Mandatory section "Tests" can not be empty or default message')
         return False
     if RCA not in pull_request or not pull_request[RCA].strip():
@@ -186,7 +185,7 @@ def validate(pull_request):
         eprint(f'Mandatory sub-section "Impact Analysis" can not be empty')
         return False
     issues_text = pull_request[ISSUES]
-    issues = find_specific_jira_keys(issues_text)
+    issues = find_specific_issue_keys(issues_text)
     if len(issues) != 0 and ('JIRA-0000' in issues):
         eprint('Invalid Issues JIRA-0000')
         return False

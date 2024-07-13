@@ -1,10 +1,13 @@
-import copy
 from argparse import ArgumentParser
 
 from github_pull_request_utils import *
 
+JIRA_DEV_RESOLUTION_COMMENT_KEYS = [PULL_REQUEST_TITLE, DESCRIPTION_OF_CHANGES, TESTS, PULL_REQUEST_LINKS, REVIEWER_USERNAMES, DATABASE_CHANGES, PROPERTY_CHANGES]
+
 jira_rest_api_url = 'https://jira.mycompany.com/rest/api/latest'
-JIRA_CUSTUM_FIELD_XYZ = 'customfield_12345'
+JIRA_CUSTOM_FIELD_XYZ = 'customfield_12345'
+header = '''{panel:title=Dev Resolution Comments|borderStyle=dashed|borderColor=#cccccc|titleBGColor=#f7d6c1|bgColor=#ffffce}'''
+footer = '''{panel}'''
 
 
 def parse_cli_arguments():
@@ -143,35 +146,80 @@ def is_defect(issue):
     return issue['fields']['issuetype']['name'] == "Defect"
 
 
-def populate_jira_custom_field(context, issue, fields):
-    rca = context.get(RCA)
+def populate_jira_custom_field(pull_request_details, issue, fields):
+    rca = pull_request_details.get(RCA)
     if is_defect(issue) and rca:
-        if issue['fields'][JIRA_CUSTUM_FIELD_XYZ] and rca not in issue['fields'][JIRA_CUSTUM_FIELD_XYZ]:
-            rca = issue['fields'][JIRA_CUSTUM_FIELD_XYZ] + "\n" + rca
-            fields[JIRA_CUSTUM_FIELD_XYZ] = rca
-        elif not issue['fields'][JIRA_CUSTUM_FIELD_XYZ]:
-            fields[JIRA_CUSTUM_FIELD_XYZ] = rca
+        if issue['fields'][JIRA_CUSTOM_FIELD_XYZ] and rca not in issue['fields'][JIRA_CUSTOM_FIELD_XYZ]:
+            rca = issue['fields'][JIRA_CUSTOM_FIELD_XYZ] + "\n" + rca
+            fields[JIRA_CUSTOM_FIELD_XYZ] = rca
+        elif not issue['fields'][JIRA_CUSTOM_FIELD_XYZ]:
+            fields[JIRA_CUSTOM_FIELD_XYZ] = rca
     return fields
+
+
+def markdown_checkboxes_to_jira_syntax(text):
+    text = text.replace("- [ ]", "(x)")
+    text = text.replace("- [x]", "(/)")
+    return text
+
+
+def transform_text_from_markdown_to_jira_syntax(text):
+    if not text:
+        return text
+    text = text.replace('**', '*')
+    text_lines = text.splitlines()
+    for i, line in enumerate(text_lines):
+        if line and line.strip().startswith("```"):
+            if len(line.strip()) == 3:
+                text_lines[i] = "{code}"
+            else:
+                text_lines[i] = "{code:" + line.strip()[3:].strip() + "}"
+        elif line and line.strip().startswith("```"):
+            text_lines[i] = "{code}"
+        elif line and line.strip().startswith("#####"):
+            text_lines[i] = "h5. " + line.strip()[5:]
+        elif line and line.strip().startswith("####"):
+            text_lines[i] = "h4. " + line.strip()[4:]
+        elif line and line.strip().startswith("###"):
+            text_lines[i] = "h3. " + line.strip()[3:]
+        elif line and line.strip().startswith("##"):
+            text_lines[i] = "h2. " + line.strip()[2:]
+    text = "\n".join(text_lines)
+    text = inline_code(text)
+    text = markdown_checkboxes_to_jira_syntax(text)
+    text = os.linesep.join([s for s in text.splitlines() if s])
+    return text
+
+
+def populate_jira_comment(pull_request_details):
+    pull_request_details[REVIEWERS] = ', '.join(pull_request_details[REVIEWER_USERNAMES])
+    jira_comment = header + "\n"
+    for key in JIRA_DEV_RESOLUTION_COMMENT_KEYS:
+        jira_comment = jira_comment + "|*" + \
+                       key + "*|" + transform_text_from_markdown_to_jira_syntax(pull_request_details[key]) + "|\n"
+    jira_comment = jira_comment + footer
+    pull_request_details['jira_comment'] = jira_comment
 
 
 def main():
     # Parse CLI arguments
     args = parse_cli_arguments()
     # Generate dev resolution template
-    context = generate_pr_details(args)
+    pull_request_details = generate_pull_request_details(args)
+    populate_jira_comment(pull_request_details)
     # Get issue details
     issue_key = args['issue_key']
     if issue_key:
         # TODO: If you want to post custom fields, uncomment below lines and modify the code accordingly
         # issue = get_issue_details(args, issue_key)
         # fields = {}
-        # populate_jira_custom_field(context, issue, fields)
+        # populate_jira_custom_field(pull_request_details, issue, fields)
         # if fields:
         #     post_update(args, issue_key, fields)
-        if context['jira_comment']:
-            post_comment(args, issue_key, context['jira_comment'])
+        if pull_request_details['jira_comment']:
+            post_comment(args, issue_key, pull_request_details['jira_comment'])
     else:
-        print(context['jira_comment'])
+        print(pull_request_details['jira_comment'])
 
 
 if __name__ == "__main__":
